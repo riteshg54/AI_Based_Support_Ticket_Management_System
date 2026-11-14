@@ -1,0 +1,1 @@
+const t=[['T-001','Asha','Forgot my password','REPLY'],['T-002','Ravi','API keeps timing out','ESCALATE'],['T-003','Neha','Unauthorized payment','ESCALATE']];document.getElementById('tickets').innerHTML=t.map(x=>`<p><b>${x[0]}</b> — ${x[1]} — ${x[2]} <strong>${x[3]}</strong></p>`).join('');
