@@ -1,4 +1,4 @@
-fastapi
-uvicorn
-PyJWT
-pydantic[email]
+fastapi>=0.115
+uvicorn[standard]>=0.30
+PyJWT>=2.9
+pydantic[email]>=2.8
