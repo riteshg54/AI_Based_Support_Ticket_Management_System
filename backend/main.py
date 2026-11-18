@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
 DB=os.getenv("SUPPORTAI_DB","supportai.db")
-SECRET=os.getenv("SUPPORTAI_SECRET","change-this-secret-in-production")
+SECRET=os.getenv("SUPPORTAI_SECRET","supportai-local-demo-secret-change-in-production")
 ALGO="HS256"
 security=HTTPBearer(auto_error=False)
 app=FastAPI(title="SupportAI API",version="2.0")
@@ -107,7 +107,7 @@ def get_replies(ticket_id:int,user=Depends(current_user)):
     c=db(); t=c.execute("SELECT * FROM tickets WHERE id=?",(ticket_id,)).fetchone()
     if not t: c.close(); raise HTTPException(404,"Ticket not found")
     if user["role"]=="user" and t["user_id"]!=user["id"]: c.close(); raise HTTPException(403,"Forbidden")
-    rows=c.execute("SELECT r.*,u.name,u.role FROM replies r JOIN users u ON u.id=r.user_id WHERE r.ticket_id=? ORDER BY r.id",(ticket_id,)).fetchall(); c.close()
+    rows=c.execute("SELECT r.*,u.name,u.role FROM replies r JOIN users u ON u.id=r.user_id WHERE r.ticket_id=? AND (r.internal=0 OR ?!='user') ORDER BY r.id",(ticket_id,user["role"])).fetchall(); c.close()
     return {"replies":[dict(r) for r in rows]}
 
 @app.post("/api/tickets/{ticket_id}/replies")
@@ -150,9 +150,34 @@ def create_junior(data:RegisterRequest,user=Depends(admin_only)):
 
 @app.get("/api/admin/stats")
 def stats(user=Depends(admin_only)):
-    c=db(); out={}
-    for k,q in {"total":"SELECT COUNT(*) n FROM tickets","escalated":"SELECT COUNT(*) n FROM tickets WHERE status='ESCALATED'","open":"SELECT COUNT(*) n FROM tickets WHERE status IN ('OPEN','IN_PROGRESS')","resolved":"SELECT COUNT(*) n FROM tickets WHERE status IN ('RESOLVED','CLOSED')","unassigned":"SELECT COUNT(*) n FROM tickets WHERE assigned_to IS NULL AND status NOT IN ('RESOLVED','CLOSED')"}.items(): out[k]=c.execute(q).fetchone()["n"]
-    c.close(); return out
+    c=db()
+    out={}
+    queries={
+        "total":"SELECT COUNT(*) n FROM tickets",
+        "open":"SELECT COUNT(*) n FROM tickets WHERE status='OPEN'",
+        "in_progress":"SELECT COUNT(*) n FROM tickets WHERE status='IN_PROGRESS'",
+        "escalated":"SELECT COUNT(*) n FROM tickets WHERE status='ESCALATED'",
+        "resolved":"SELECT COUNT(*) n FROM tickets WHERE status IN ('RESOLVED','CLOSED')",
+        "critical":"SELECT COUNT(*) n FROM tickets WHERE priority='CRITICAL'",
+        "unassigned":"SELECT COUNT(*) n FROM tickets WHERE assigned_to IS NULL AND status NOT IN ('RESOLVED','CLOSED')"
+    }
+    for k,q in queries.items(): out[k]=c.execute(q).fetchone()["n"]
+    out["resolution_rate"]=round((out["resolved"]/out["total"])*100,1) if out["total"] else 0
+    out["by_priority"]={r["priority"]:r["n"] for r in c.execute("SELECT priority,COUNT(*) n FROM tickets GROUP BY priority")}
+    out["by_status"]={r["status"]:r["n"] for r in c.execute("SELECT status,COUNT(*) n FROM tickets GROUP BY status")}
+    out["by_agent"]=[dict(r) for r in c.execute("""
+        SELECT COALESCE(a.name,'Unassigned') agent,
+               COUNT(t.id) total,
+               SUM(CASE WHEN t.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) resolved
+        FROM tickets t LEFT JOIN users a ON a.id=t.assigned_to
+        GROUP BY t.assigned_to ORDER BY total DESC
+    """).fetchall()]
+    out["recent"]=[dict(r) for r in c.execute("""
+        SELECT date(created_at) day,COUNT(*) count
+        FROM tickets GROUP BY date(created_at) ORDER BY day DESC LIMIT 14
+    """).fetchall()]
+    c.close()
+    return out
 
 @app.post("/api/chat")
 def chatbot(data:ChatRequest,user=Depends(current_user)):
