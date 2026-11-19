@@ -54,7 +54,7 @@ function adminDashboard(s,t){
  '<div class="panel"><div class="panelhead"><h2>Critical queue</h2><button onclick="loadTickets()">View all</button></div>'+ticketTable(t.filter(x=>x.priority==="CRITICAL").slice(0,5),true)+'</div>';
 }
 function ticketTable(t,compact=false){
- return '<div class="tickets">'+(t.length?t.map(x=>'<div class="ticket" onclick="openTicket('+x.id+')"><div><b>'+esc(x.public_id)+' · '+esc(x.subject)+'</b><p>'+esc(x.message).slice(0,110)+'</p></div><div><span class="status '+x.status+'">'+x.status+'</span><small>'+esc(x.assigned_name||"Unassigned")+'</small></div></div>').join(""):"<p class="muted">No tickets found.</p>")+'</div>';
+ return '<div class="tickets">'+(t.length?t.map(x=>'<div class="ticket" onclick="openTicket('+x.id+')"><div><b>'+esc(x.public_id)+' · '+esc(x.subject)+'</b><p>'+esc(x.message).slice(0,110)+'</p></div><div><span class="status '+x.status+'">'+x.status+'</span><small>'+esc(x.assigned_name||"Unassigned")+'</small></div></div>').join(""):'<p class="muted">No tickets found.</p>')+'</div>';
 }
 async function loadTickets(){
  document.getElementById("title").textContent="Tickets";document.getElementById("subtitle").textContent="Search and manage support requests";
